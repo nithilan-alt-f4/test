@@ -83,18 +83,25 @@ def download():
 
     cmd.append(url)
 
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    def generate():
-        try:
-            while True:
-                chunk = proc.stdout.read(65536)
-                if not chunk:
-                    break
-                yield chunk
-        finally:
-            proc.stdout.close()
-            proc.wait()
+def generate():
+    try:
+        while True:
+            chunk = proc.stdout.read(65536)
+            if not chunk:
+                break
+            yield chunk
+            
+         # Check if there were errors after streaming finishes/fails
+        stderr_output = proc.stderr.read().decode('utf-8', errors='ignore')
+        if stderr_output.strip():
+            print(f"YT-DLP ERROR:\n{stderr_output}", flush=True) # This will show up in Render logs
+                
+    finally:
+        proc.stdout.close()
+        proc.stderr.close()
+        proc.wait()
 
     headers = {
         "Content-Disposition": f'attachment; filename="download.{ext}"',
