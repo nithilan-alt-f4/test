@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 import urllib.parse
@@ -6,6 +7,16 @@ from flask import Flask, request, Response, stream_with_context, jsonify, render
 app = Flask(__name__)
 
 YTDLP = "yt-dlp"
+COOKIES_PATH = "/tmp/cookies.txt"
+
+_raw_cookies = os.environ.get("YT_COOKIES")
+if _raw_cookies:
+    with open(COOKIES_PATH, "w") as f:
+        f.write(_raw_cookies)
+
+
+def cookie_args():
+    return ["--cookies", COOKIES_PATH] if os.path.exists(COOKIES_PATH) else []
 
 PAGE = """
 <!doctype html>
@@ -68,6 +79,7 @@ PAGE = """
         <select id="fmt" onchange="onFmtChange()">
           <option value="mp4">mp4</option>
           <option value="mp3">mp3</option>
+          <option value="flac">flac</option>
         </select>
       </div>
       <div>
@@ -110,9 +122,14 @@ function onFmtChange() {
   const fmt = document.getElementById('fmt').value;
   const q = document.getElementById('quality');
   q.innerHTML = '';
-  const opts = fmt === 'mp3'
-    ? ['320kbps', '256kbps', '192kbps', '128kbps']
-    : (qualities.length ? qualities.map(h => h + 'p') : ['1080p']);
+  let opts;
+  if (fmt === 'mp3') {
+    opts = ['320kbps', '256kbps', '192kbps', '128kbps'];
+  } else if (fmt === 'flac') {
+    opts = ['lossless'];
+  } else {
+    opts = qualities.length ? qualities.map(h => h + 'p') : ['1080p'];
+  }
   opts.forEach(o => {
     const el = document.createElement('option');
     el.value = o; el.textContent = o;
@@ -174,13 +191,13 @@ def info():
 
     cmd = [YTDLP, "--no-warnings", "--print",
            "%(title)s\n%(channel)s\n%(duration_string)s",
-           "--playlist-items", "1", url]
+           "--playlist-items", "1"] + cookie_args() + [url]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     lines = r.stdout.strip().splitlines()
     if not lines or not lines[0]:
         return jsonify(error=(r.stderr[-500:] or "lookup failed")), 400
 
-    q_cmd = [YTDLP, "--list-formats", "--no-warnings", "--playlist-items", "1", url]
+    q_cmd = [YTDLP, "--list-formats", "--no-warnings", "--playlist-items", "1"] + cookie_args() + [url]
     qr = subprocess.run(q_cmd, capture_output=True, text=True, timeout=30)
     heights = sorted({int(m.group(1)) for m in re.finditer(r"\b(\d{3,4})p\b", qr.stdout)}, reverse=True)
 
@@ -201,12 +218,15 @@ def download():
     if not url:
         return jsonify(error="no url"), 400
 
-    cmd = [YTDLP, "--no-warnings", "--restrict-filenames", "-o", "-"]
+    cmd = [YTDLP, "--no-warnings", "--restrict-filenames"] + cookie_args() + ["-o", "-"]
 
     if fmt == "mp3":
         bitrate = quality.replace("kbps", "") if "kbps" in quality else "320"
         cmd += ["-x", "--audio-format", "mp3", "--audio-quality", bitrate]
         ext = "mp3"
+    elif fmt == "flac":
+        cmd += ["-x", "--audio-format", "flac"]
+        ext = "flac"
     else:
         h = quality if quality.isdigit() else "1080"
         fs = f"bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]/best[height<={h}][ext=mp4]/best"
