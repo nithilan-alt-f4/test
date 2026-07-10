@@ -16,10 +16,9 @@ RUN curl -L -o /usr/local/bin/bgutil-pot \
     && chmod +x /usr/local/bin/bgutil-pot
 
 # --- yt-dlp plugin that talks to the provider ---
-RUN mkdir -p /root/yt-dlp-plugins \
-    && curl -L -o /tmp/plugin.zip \
-    https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-ytdlp-pot-provider-rs.zip \
-    && unzip /tmp/plugin.zip -d /root/yt-dlp-plugins \
+RUN mkdir -p /app/yt-dlp-plugins \
+    && curl -L -o /tmp/plugin.zip https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-ytdlp-pot-provider-rs.zip \
+    && unzip /tmp/plugin.zip -d /app/yt-dlp-plugins \
     && rm /tmp/plugin.zip
 
 COPY app.py start.sh ./
